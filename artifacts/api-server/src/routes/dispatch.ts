@@ -17,6 +17,7 @@ import { db } from "@workspace/db";
 import { activityTable, dispatchAttemptsTable, dispatchSettingsTable, driversTable, tripAnalyticsTable, tripsTable, type Trip } from "@workspace/db/schema";
 import { ensureSeedData } from "../lib/seed";
 import { advanceDispatch, getDispatchSettings, runDispatchSweep } from "../lib/dispatch";
+import { publishTripEvent } from "../lib/realtime";
 
 const router: IRouter = Router();
 
@@ -163,6 +164,9 @@ router.post("/dispatch/offers/:id/response", async (req, res): Promise<void> => 
   if (result.status === "rejected") {
     await advanceDispatch(result.trip.id, settings);
   }
+  if (result.status === "accepted") {
+    publishTripEvent("trip.updated", result.trip);
+  }
   res.json(RespondToDispatchOfferResponse.parse({
     status: result.status,
     trip: serializeTrip(result.trip),
@@ -229,6 +233,7 @@ router.post("/trips/:id/fare-response", async (req, res): Promise<void> => {
     })
     .where(eq(tripAnalyticsTable.tripId, result.trip.id));
   await advanceDispatch(result.trip.id, settings);
+  publishTripEvent("trip.updated", result.trip);
   res.json(RespondToFareIncreaseResponse.parse({
     status: result.status,
     trip: serializeTrip(result.trip),
