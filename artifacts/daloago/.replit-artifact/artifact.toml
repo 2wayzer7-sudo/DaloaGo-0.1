@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "DaloaGo"
+description = "Une plateforme VTC ivoirienne pour réserver une course, suivre son chauffeur et piloter l'activité depuis un espace opérationnel."
+version = "1.0.0"
+id = "artifacts/daloago"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22617
+
+[services.development]
+run = "pnpm --filter @workspace/daloago run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/daloago", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/daloago/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22617"
+BASE_PATH = "/"

@@ -1,0 +1,3 @@
+- [Orval and Zod integer compatibility](orval-zod-integers.md) — OpenAPI integer fields can emit Zod 4-only helpers in this workspace.
+- [Dispatch offer concurrency](dispatch-concurrency.md) — Lock the driver row before creating an offer and recheck pending offers inside the transaction.
+- [Telemetry boundary](telemetry-boundary.md) — Observe dispatch and trip records from an independent worker; keep unknown real-world metrics nullable.

@@ -1,0 +1,90 @@
+DaloaGo — PROMPT 3
+
+SECTION 6 UNIQUEMENT
+
+⚠️ Implémente UNIQUEMENT la section 6 du système prévu.
+
+OBJECTIF
+
+Mettre en place le système de repositionnement/recommandation après une course.
+
+Après la fin d'une course, le système peut analyser :
+
+- la position actuelle du chauffeur ;
+- la demande récente dans les zones proches ;
+- le nombre de chauffeurs disponibles dans ces zones ;
+- les données historiques déjà collectées au Prompt 2.
+
+Si une zone proche présente un intérêt réel, proposer au chauffeur de s'y repositionner.
+
+RÈGLES
+
+- La recommandation est OPTIONNELLE.
+- Le chauffeur choisit toujours lui-même.
+- Ne jamais déplacer automatiquement un chauffeur.
+- Le chauffeur peut :
+  - accepter ;
+  - ignorer ;
+  - fermer/refuser la recommandation.
+- Ne pas envoyer de recommandation si les données sont insuffisantes.
+- Ne pas créer de prédiction IA/ML.
+- Utiliser uniquement les données réellement disponibles.
+- Éviter de recommander systématiquement la même zone ou de concentrer tous les chauffeurs au même endroit.
+
+ADMIN
+
+Ajouter uniquement les paramètres nécessaires pour activer/désactiver cette recommandation et, si nécessaire, limiter sa durée.
+
+Réutiliser "/operations" et les structures existantes.
+
+⚠️ INTERDICTIONS ABSOLUES
+
+NE PAS modifier :
+
+- le moteur de dispatch du Prompt 1 ;
+- la tarification ;
+- les commissions ;
+- les zones/statistiques du Prompt 2 sauf intégration strictement nécessaire ;
+- la disponibilité chauffeur ;
+- l'authentification.
+
+NE PAS ajouter :
+
+- prédiction avancée ;
+- IA/ML ;
+- priorité temporaire ;
+- nouveau système de dispatch ;
+- nouvelle logique tarifaire ;
+- refactoring général ;
+- fonctionnalités des sections suivantes.
+
+Si une modification hors section 6 est nécessaire :
+ARRÊTE-TOI ET SIGNALE-LE. Ne l'implémente pas.
+
+TESTS
+
+Vérifier uniquement :
+
+1. Une course terminée peut déclencher une recommandation.
+2. Une zone pertinente peut être proposée.
+3. Le chauffeur peut accepter.
+4. Le chauffeur peut ignorer/refuser.
+5. Aucun déplacement automatique n'est effectué.
+6. Les données insuffisantes empêchent une recommandation injustifiée.
+7. Plusieurs chauffeurs ne sont pas automatiquement envoyés vers la même zone.
+8. Les fonctionnalités des Prompts 1 et 2 fonctionnent toujours.
+
+FIN
+
+À la fin, indique seulement :
+
+- fichiers modifiés ;
+- tables/champs éventuellement ajoutés ;
+- API/événements ajoutés ;
+- paramètres admin ;
+- tests effectués ;
+- problèmes éventuels.
+
+⚠️ NE PAS continuer vers la section 7.
+⚠️ NE PAS ajouter de fonctionnalités supplémentaires.
+⚠️ Aucun déploiement.

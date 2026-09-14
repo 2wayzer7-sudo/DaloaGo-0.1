@@ -1,0 +1,963 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: trips
+    description: Trip booking and lifecycle operations
+  - name: drivers
+    description: Driver availability operations
+  - name: dashboard
+    description: Operational overview
+  - name: telemetry
+    description: Structured trip telemetry
+  - name: zones
+    description: Configurable virtual zones and demand statistics
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /trips:
+    get:
+      operationId: listTrips
+      tags: [trips]
+      summary: List trips
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [passenger, driver, admin]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [requested, accepted, arriving, in_progress, completed, cancelled]
+      responses:
+        "200":
+          description: Trip list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trip"
+    post:
+      operationId: createTrip
+      tags: [trips]
+      summary: Request a trip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TripInput"
+      responses:
+        "201":
+          description: Created trip
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+  /trips/{id}:
+    get:
+      operationId: getTrip
+      tags: [trips]
+      summary: Get a trip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trip
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+        "404":
+          description: Trip not found
+    patch:
+      operationId: updateTripStatus
+      tags: [trips]
+      summary: Update trip status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TripStatusInput"
+      responses:
+        "200":
+          description: Updated trip
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+        "404":
+          description: Trip not found
+  /trips/{id}/fare-response:
+    post:
+      operationId: respondToFareIncrease
+      tags: [trips]
+      summary: Accept or reject a fare increase proposal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FareIncreaseResponseInput"
+      responses:
+        "200":
+          description: Fare proposal response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FareIncreaseResponse"
+        "404":
+          description: Trip not found
+        "409":
+          description: No pending proposal
+  /trips/{id}/telemetry:
+    get:
+      operationId: getTripTelemetry
+      tags: [telemetry]
+      summary: Get structured telemetry for a trip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trip telemetry and lifecycle events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TripTelemetry"
+        "404":
+          description: Trip not found
+  /drivers:
+    get:
+      operationId: listDrivers
+      tags: [drivers]
+      summary: List nearby drivers
+      responses:
+        "200":
+          description: Driver list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Driver"
+  /drivers/{id}/location:
+    patch:
+      operationId: updateDriverLocation
+      tags: [drivers]
+      summary: Update a driver's GPS position
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DriverLocationInput"
+      responses:
+        "200":
+          description: Updated driver
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Driver"
+        "404":
+          description: Driver not found
+  /drivers/{id}/status:
+    patch:
+      operationId: updateDriverStatus
+      tags: [drivers]
+      summary: Update a driver's availability
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DriverStatusInput"
+      responses:
+        "200":
+          description: Updated driver
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Driver"
+        "404":
+          description: Driver not found
+  /drivers/{id}/reposition-recommendation:
+    get:
+      operationId: getDriverRepositionRecommendation
+      tags: [reposition]
+      summary: Get the current optional reposition recommendation for a driver
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Current recommendation or no recommendation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverRepositionRecommendationResponse"
+        "404":
+          description: Driver not found
+  /drivers/{id}/reposition-recommendation/{recommendationId}/response:
+    post:
+      operationId: respondToDriverRepositionRecommendation
+      tags: [reposition]
+      summary: Accept, ignore, or close a reposition recommendation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+        - name: recommendationId
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepositionRecommendationResponseInput"
+      responses:
+        "200":
+          description: Updated recommendation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverRepositionRecommendationResponse"
+        "404":
+          description: Recommendation not found
+        "409":
+          description: Recommendation expired or already handled
+  /reposition/settings:
+    get:
+      operationId: getRepositionSettings
+      tags: [reposition]
+      summary: Get optional reposition recommendation settings
+      responses:
+        "200":
+          description: Reposition settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepositionSettings"
+    patch:
+      operationId: updateRepositionSettings
+      tags: [reposition]
+      summary: Update optional reposition recommendation settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepositionSettingsInput"
+      responses:
+        "200":
+          description: Updated reposition settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepositionSettings"
+  /demand-forecast:
+    get:
+      operationId: getDemandForecast
+      tags: [forecast]
+      summary: Get short-horizon probabilistic demand estimates
+      responses:
+        "200":
+          description: Demand forecast by active zone
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemandForecastResponse"
+  /demand-forecast/settings:
+    get:
+      operationId: getDemandForecastSettings
+      tags: [forecast]
+      summary: Get demand forecast settings
+      responses:
+        "200":
+          description: Demand forecast settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemandForecastSettings"
+    patch:
+      operationId: updateDemandForecastSettings
+      tags: [forecast]
+      summary: Update demand forecast settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DemandForecastSettingsInput"
+      responses:
+        "200":
+          description: Updated demand forecast settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemandForecastSettings"
+  /dispatch/offers:
+    get:
+      operationId: listDispatchOffers
+      tags: [dispatch]
+      summary: List pending dispatch offers for a driver
+      parameters:
+        - name: driverId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Dispatch offers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DispatchOffer"
+  /dispatch/offers/{id}/response:
+    post:
+      operationId: respondToDispatchOffer
+      tags: [dispatch]
+      summary: Accept or reject a dispatch offer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DispatchOfferResponseInput"
+      responses:
+        "200":
+          description: Dispatch offer response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DispatchOfferResponse"
+        "404":
+          description: Offer not found
+        "409":
+          description: Offer is no longer available
+  /dispatch/settings:
+    get:
+      operationId: getDispatchSettings
+      tags: [dispatch]
+      summary: Get dispatch settings
+      responses:
+        "200":
+          description: Dispatch settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DispatchSettings"
+    patch:
+      operationId: updateDispatchSettings
+      tags: [dispatch]
+      summary: Update dispatch settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DispatchSettingsInput"
+      responses:
+        "200":
+          description: Updated dispatch settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DispatchSettings"
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get operational dashboard summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+  /dashboard/activity:
+    get:
+      operationId: getDashboardActivity
+      tags: [dashboard]
+      summary: Get recent activity
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Activity"
+  /zones:
+    get:
+      operationId: listVirtualZones
+      tags: [zones]
+      summary: List configurable virtual zones
+      responses:
+        "200":
+          description: Virtual zones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VirtualZone"
+    post:
+      operationId: createVirtualZone
+      tags: [zones]
+      summary: Create a virtual zone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VirtualZoneCreateInput"
+      responses:
+        "201":
+          description: Created virtual zone
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VirtualZone"
+  /zones/{id}:
+    patch:
+      operationId: updateVirtualZone
+      tags: [zones]
+      summary: Update a virtual zone
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VirtualZoneUpdateInput"
+      responses:
+        "200":
+          description: Updated virtual zone
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VirtualZone"
+        "404":
+          description: Zone not found
+  /zones/{id}/stats:
+    get:
+      operationId: getVirtualZoneStats
+      tags: [zones]
+      summary: Get demand statistics for a virtual zone
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Zone statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VirtualZoneStats"
+        "404":
+          description: Zone not found
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    Trip:
+      type: object
+      required: [id, passengerName, pickup, destination, status, fare, initialFare, distanceKm, durationMin, pickupLatitude, pickupLongitude, destinationLatitude, destinationLongitude, dispatchStage, dispatchStartedAt, fareIncreaseCount, fareProposalCount, fareProposalStatus, requestedAt, cancellationReason]
+      properties:
+        id: { type: number }
+        passengerName: { type: string }
+        passengerPhone: { type: ["string", "null"] }
+        pickup: { type: string }
+        destination: { type: string }
+        status:
+          type: string
+          enum: [requested, accepted, arriving, in_progress, completed, cancelled]
+        fare: { type: number }
+        initialFare: { type: number }
+        distanceKm: { type: number }
+        durationMin: { type: number }
+        pickupLatitude: { type: number }
+        pickupLongitude: { type: number }
+        destinationLatitude: { type: ["number", "null"] }
+        destinationLongitude: { type: ["number", "null"] }
+        driverId: { type: ["number", "null"] }
+        driverName: { type: ["string", "null"] }
+        vehicle: { type: ["string", "null"] }
+        dispatchStage: { type: number }
+        dispatchStartedAt: { type: string, format: date-time }
+        fareIncreaseCount: { type: number }
+        fareProposalCount: { type: number }
+        fareProposalStatus:
+          type: string
+          enum: [none, pending, accepted, rejected]
+        fareProposalAmount: { type: ["number", "null"] }
+        fareProposalAt: { type: ["string", "null"], format: date-time }
+        requestedAt: { type: string, format: date-time }
+        completedAt: { type: ["string", "null"] }
+        cancellationReason: { type: ["string", "null"] }
+    TripInput:
+      type: object
+      required: [passengerName, pickup, destination, distanceKm, durationMin]
+      properties:
+        passengerName: { type: string, minLength: 2 }
+        passengerPhone: { type: string }
+        pickup: { type: string, minLength: 2 }
+        destination: { type: string, minLength: 2 }
+        distanceKm: { type: number, minimum: 0.5 }
+        durationMin: { type: number, minimum: 1 }
+        pickupLatitude: { type: number, minimum: -90, maximum: 90 }
+        pickupLongitude: { type: number, minimum: -180, maximum: 180 }
+        destinationLatitude: { type: number, minimum: -90, maximum: 90 }
+        destinationLongitude: { type: number, minimum: -180, maximum: 180 }
+    TripStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [requested, accepted, arriving, in_progress, completed, cancelled]
+        reason: { type: ["string", "null"], maxLength: 120 }
+    Driver:
+      type: object
+      required: [id, name, phone, vehicle, plate, rating, status, tripsToday, latitude, longitude, lastLocationAt, capacity]
+      properties:
+        id: { type: number }
+        name: { type: string }
+        phone: { type: string }
+        vehicle: { type: string }
+        plate: { type: string }
+        rating: { type: number }
+        status:
+          type: string
+          enum: [available, on_trip, offline]
+        tripsToday: { type: number }
+        latitude: { type: number }
+        longitude: { type: number }
+        lastLocationAt: { type: string, format: date-time }
+        capacity: { type: number }
+    FareIncreaseResponseInput:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [accept, reject]
+    FareIncreaseResponse:
+      type: object
+      required: [status, trip]
+      properties:
+        status:
+          type: string
+          enum: [accepted, rejected]
+        trip:
+          $ref: "#/components/schemas/Trip"
+    RepositionSettings:
+      type: object
+      required: [id, enabled, recommendationDurationMin, updatedAt]
+      properties:
+        id: { type: number }
+        enabled: { type: boolean }
+        recommendationDurationMin: { type: number, minimum: 1, maximum: 240 }
+        updatedAt: { type: string, format: date-time }
+    RepositionSettingsInput:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        recommendationDurationMin: { type: number, minimum: 1, maximum: 240 }
+    DriverRepositionRecommendation:
+      type: object
+      required: [id, tripId, driverId, zoneId, zoneName, demandLevel, demandsPerHour, availableDrivers, distanceToZoneKm, reason, status, createdAt, expiresAt, respondedAt]
+      properties:
+        id: { type: number }
+        tripId: { type: number }
+        driverId: { type: number }
+        zoneId: { type: number }
+        zoneName: { type: string }
+        demandLevel: { type: string, enum: [high] }
+        demandsPerHour: { type: number }
+        availableDrivers: { type: number }
+        distanceToZoneKm: { type: number }
+        reason: { type: string }
+        status: { type: string, enum: [pending, accepted, ignored, dismissed, expired] }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        respondedAt: { type: ["string", "null"], format: date-time }
+    DriverRepositionRecommendationResponse:
+      type: object
+      required: [recommendation]
+      properties:
+        recommendation:
+          anyOf:
+            - $ref: "#/components/schemas/DriverRepositionRecommendation"
+            - type: "null"
+    RepositionRecommendationResponseInput:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [accept, ignore, dismiss]
+    DemandForecastSettings:
+      type: object
+      required: [id, enabled, minimumDataPoints, forecastHorizonHours, updatedAt]
+      properties:
+        id: { type: number }
+        enabled: { type: boolean }
+        minimumDataPoints: { type: number, minimum: 1, maximum: 10000 }
+        forecastHorizonHours: { type: number, minimum: 1, maximum: 12 }
+        updatedAt: { type: string, format: date-time }
+    DemandForecastSettingsInput:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        minimumDataPoints: { type: number, minimum: 1, maximum: 10000 }
+        forecastHorizonHours: { type: number, minimum: 1, maximum: 12 }
+    DemandForecastProbability:
+      type: object
+      required: [low, normal, high]
+      properties:
+        low: { type: number, minimum: 0, maximum: 1 }
+        normal: { type: number, minimum: 0, maximum: 1 }
+        high: { type: number, minimum: 0, maximum: 1 }
+    DemandForecastHour:
+      type: object
+      required: [hour, observedDemand, comparableDemand, estimatedDemandPerHour]
+      properties:
+        hour: { type: string, format: date-time }
+        observedDemand: { type: number }
+        comparableDemand: { type: number }
+        estimatedDemandPerHour: { type: ["number", "null"] }
+    DemandForecastZone:
+      type: object
+      required: [zoneId, zoneName, level, probabilities, expectedDemandPerHour, recentDemandPerHour, comparableDemandPerHour, recentTrendPercent, availableDrivers, hourly]
+      properties:
+        zoneId: { type: number }
+        zoneName: { type: string }
+        level: { type: string, enum: [low, normal, high, insufficient] }
+        probabilities:
+          anyOf:
+            - $ref: "#/components/schemas/DemandForecastProbability"
+            - type: "null"
+        expectedDemandPerHour: { type: ["number", "null"] }
+        recentDemandPerHour: { type: ["number", "null"] }
+        comparableDemandPerHour: { type: ["number", "null"] }
+        recentTrendPercent: { type: ["number", "null"] }
+        availableDrivers: { type: number }
+        hourly:
+          type: array
+          items:
+            $ref: "#/components/schemas/DemandForecastHour"
+    DemandForecastResponse:
+      type: object
+      required: [enabled, generatedAt, horizonHours, minimumDataPoints, zones]
+      properties:
+        enabled: { type: boolean }
+        generatedAt: { type: string, format: date-time }
+        horizonHours: { type: number }
+        minimumDataPoints: { type: number }
+        zones:
+          type: array
+          items:
+            $ref: "#/components/schemas/DemandForecastZone"
+    DriverLocationInput:
+      type: object
+      required: [latitude, longitude]
+      properties:
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+    DriverStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [available, on_trip, offline]
+    DispatchOffer:
+      type: object
+      required: [id, tripId, driverId, stage, status, distanceKm, etaMin, offeredAt, expiresAt, trip]
+      properties:
+        id: { type: number }
+        tripId: { type: number }
+        driverId: { type: number }
+        stage: { type: number }
+        status:
+          type: string
+          enum: [offered, accepted, rejected, expired, unavailable, cancelled]
+        distanceKm: { type: number }
+        etaMin: { type: number }
+        offeredAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        respondedAt: { type: ["string", "null"], format: date-time }
+        trip:
+          $ref: "#/components/schemas/Trip"
+    DispatchOfferResponseInput:
+      type: object
+      required: [driverId, decision]
+      properties:
+        driverId: { type: number }
+        decision:
+          type: string
+          enum: [accept, reject]
+    DispatchOfferResponse:
+      type: object
+      required: [status, trip]
+      properties:
+        status:
+          type: string
+          enum: [accepted, rejected, unavailable, expired]
+        trip:
+          $ref: "#/components/schemas/Trip"
+    DispatchSettings:
+      type: object
+      required: [id, searchRadiiKm, stageDurationsMin, fareIncreaseAfterMin, maxFareIncreases, fareIncreaseAmounts, offerTimeoutSec, gpsFreshnessSec, averageSpeedKmh, updatedAt]
+      properties:
+        id: { type: number }
+        searchRadiiKm:
+          type: array
+          items: { type: number, minimum: 0.1 }
+        stageDurationsMin:
+          type: array
+          items: { type: number, minimum: 0.1 }
+        fareIncreaseAfterMin: { type: number, minimum: 1 }
+        maxFareIncreases: { type: number, minimum: 0, maximum: 2 }
+        fareIncreaseAmounts:
+          type: array
+          items: { type: number, minimum: 1 }
+        offerTimeoutSec: { type: number, minimum: 5 }
+        gpsFreshnessSec: { type: number, minimum: 30 }
+        averageSpeedKmh: { type: number, minimum: 5 }
+        updatedAt: { type: string, format: date-time }
+    DispatchSettingsInput:
+      type: object
+      properties:
+        searchRadiiKm:
+          type: array
+          minItems: 1
+          items: { type: number, minimum: 0.1 }
+        stageDurationsMin:
+          type: array
+          minItems: 1
+          items: { type: number, minimum: 0.1 }
+        fareIncreaseAfterMin: { type: number, minimum: 1 }
+        maxFareIncreases: { type: number, minimum: 0, maximum: 2 }
+        fareIncreaseAmounts:
+          type: array
+          minItems: 1
+          items: { type: number, minimum: 1 }
+        offerTimeoutSec: { type: number, minimum: 5 }
+        gpsFreshnessSec: { type: number, minimum: 30 }
+        averageSpeedKmh: { type: number, minimum: 5 }
+    DashboardSummary:
+      type: object
+      required: [tripsToday, activeTrips, availableDrivers, revenueToday, completionRate]
+      properties:
+        tripsToday: { type: number }
+        activeTrips: { type: number }
+        availableDrivers: { type: number }
+        revenueToday: { type: number }
+        completionRate: { type: number }
+    Activity:
+      type: object
+      required: [id, type, title, description, createdAt]
+      properties:
+        id: { type: number }
+        type:
+          type: string
+          enum: [trip_requested, trip_completed, driver_joined, payout]
+        title: { type: string }
+        description: { type: string }
+        createdAt: { type: string, format: date-time }
+    TripAnalytics:
+      type: object
+      required: [tripId, pickupZoneId, destinationZoneId, availableDriversAtRequest, proposedDriverDistanceKm, proposedDriverEtaMin, driverFoundAt, searchDurationSec, approachStartedAt, tripStartedAt, approachDurationSec, actualDistanceKm, actualDurationSec, acceptedFare, cancellationReason]
+      properties:
+        tripId: { type: number }
+        pickupZoneId: { type: ["number", "null"] }
+        destinationZoneId: { type: ["number", "null"] }
+        availableDriversAtRequest: { type: number }
+        proposedDriverDistanceKm: { type: ["number", "null"] }
+        proposedDriverEtaMin: { type: ["number", "null"] }
+        driverFoundAt: { type: ["string", "null"], format: date-time }
+        searchDurationSec: { type: ["number", "null"] }
+        approachStartedAt: { type: ["string", "null"], format: date-time }
+        tripStartedAt: { type: ["string", "null"], format: date-time }
+        approachDurationSec: { type: ["number", "null"] }
+        actualDistanceKm: { type: ["number", "null"] }
+        actualDurationSec: { type: ["number", "null"] }
+        acceptedFare: { type: ["number", "null"] }
+        cancellationReason: { type: ["string", "null"] }
+    TripEvent:
+      type: object
+      required: [id, eventKey, tripId, type, dispatchAttemptId, driverId, stage, distanceKm, etaMin, reason, occurredAt]
+      properties:
+        id: { type: number }
+        eventKey: { type: string }
+        tripId: { type: number }
+        type: { type: string }
+        dispatchAttemptId: { type: ["number", "null"] }
+        driverId: { type: ["number", "null"] }
+        stage: { type: ["number", "null"] }
+        distanceKm: { type: ["number", "null"] }
+        etaMin: { type: ["number", "null"] }
+        reason: { type: ["string", "null"] }
+        occurredAt: { type: string, format: date-time }
+    TripTelemetry:
+      type: object
+      required: [tripId, analytics, events]
+      properties:
+        tripId: { type: number }
+        analytics:
+          $ref: "#/components/schemas/TripAnalytics"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/TripEvent"
+    VirtualZone:
+      type: object
+      required: [id, name, description, centerLatitude, centerLongitude, radiusKm, lowDemandPerHour, highDemandPerHour, minSampleSize, active, createdAt, updatedAt]
+      properties:
+        id: { type: number }
+        name: { type: string, minLength: 2 }
+        description: { type: ["string", "null"] }
+        centerLatitude: { type: number }
+        centerLongitude: { type: number }
+        radiusKm: { type: number }
+        lowDemandPerHour: { type: number }
+        highDemandPerHour: { type: number }
+        minSampleSize: { type: number }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    VirtualZoneCreateInput:
+      type: object
+      required: [name, centerLatitude, centerLongitude, radiusKm, lowDemandPerHour, highDemandPerHour, minSampleSize]
+      properties:
+        name: { type: string, minLength: 2 }
+        description: { type: string }
+        centerLatitude: { type: number, minimum: -90, maximum: 90 }
+        centerLongitude: { type: number, minimum: -180, maximum: 180 }
+        radiusKm: { type: number, minimum: 0.1 }
+        lowDemandPerHour: { type: number, minimum: 0 }
+        highDemandPerHour: { type: number, minimum: 0 }
+        minSampleSize: { type: number, minimum: 1 }
+        active: { type: boolean }
+    VirtualZoneUpdateInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 2 }
+        description: { type: ["string", "null"] }
+        centerLatitude: { type: number, minimum: -90, maximum: 90 }
+        centerLongitude: { type: number, minimum: -180, maximum: 180 }
+        radiusKm: { type: number, minimum: 0.1 }
+        lowDemandPerHour: { type: number, minimum: 0 }
+        highDemandPerHour: { type: number, minimum: 0 }
+        minSampleSize: { type: number, minimum: 1 }
+        active: { type: boolean }
+    VirtualZoneStats:
+      type: object
+      required: [zoneId, from, to, demands, completedTrips, demandsPerHour, availableDrivers, activeDrivers, averageSearchTimeSec, averageWaitTimeSec, refusals, cancellations, demandLevel, demandLevelLabel]
+      properties:
+        zoneId: { type: number }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        demands: { type: number }
+        completedTrips: { type: number }
+        demandsPerHour: { type: number }
+        availableDrivers: { type: number }
+        activeDrivers: { type: number }
+        averageSearchTimeSec: { type: ["number", "null"] }
+        averageWaitTimeSec: { type: ["number", "null"] }
+        refusals: { type: number }
+        cancellations: { type: number }
+        demandLevel:
+          type: string
+          enum: [low, medium, high, insufficient]
+        demandLevelLabel: { type: string }
+

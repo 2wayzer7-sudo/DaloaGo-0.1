@@ -1,0 +1,34 @@
+databases:
+  - name: daloago-db
+    databaseName: daloago
+    user: daloago
+    plan: free
+
+services:
+  - type: web
+    name: daloago-api
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @workspace/db run push && pnpm --filter @workspace/api-server run build
+    startCommand: pnpm --filter @workspace/api-server run start
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: daloago-db
+          property: connectionString
+
+  - type: web
+    name: daloago-web
+    runtime: static
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && PORT=10000 BASE_PATH=/ pnpm --filter @workspace/daloago run build
+    staticPublishPath: artifacts/daloago/dist/public
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://daloago-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

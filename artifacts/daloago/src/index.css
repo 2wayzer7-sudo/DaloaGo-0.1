@@ -1,0 +1,120 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --font-sans: var(--app-font-sans);
+  --font-mono: var(--app-font-mono);
+  --radius-lg: var(--radius);
+}
+
+:root {
+  --background: 42 47% 95%;
+  --foreground: 160 28% 14%;
+  --border: 40 20% 84%;
+  --input: 40 20% 84%;
+  --ring: 160 56% 27%;
+  --card: 42 50% 98%;
+  --card-foreground: 160 28% 14%;
+  --primary: 160 56% 27%;
+  --primary-foreground: 43 50% 96%;
+  --secondary: 44 78% 54%;
+  --secondary-foreground: 160 28% 14%;
+  --muted: 40 24% 90%;
+  --muted-foreground: 160 12% 43%;
+  --accent: 14 73% 56%;
+  --accent-foreground: 42 47% 95%;
+  --destructive: 4 65% 47%;
+  --destructive-foreground: 42 47% 95%;
+  --radius: 1.1rem;
+  --app-font-sans: 'DM Sans', sans-serif;
+  --app-font-mono: 'Space Mono', monospace;
+  --shadow-soft: 0 16px 40px rgba(48, 67, 55, .08);
+  --shadow-card: 0 4px 0 rgba(22, 61, 49, .04), 0 16px 32px rgba(48, 67, 55, .08);
+}
+
+.dark {
+  --background: 161 28% 10%;
+  --foreground: 42 45% 94%;
+  --border: 160 18% 24%;
+  --input: 160 18% 24%;
+  --ring: 44 78% 54%;
+  --card: 161 24% 14%;
+  --card-foreground: 42 45% 94%;
+  --primary: 44 78% 54%;
+  --primary-foreground: 160 28% 12%;
+  --secondary: 160 34% 24%;
+  --secondary-foreground: 42 45% 94%;
+  --muted: 160 18% 20%;
+  --muted-foreground: 42 12% 67%;
+  --accent: 14 73% 56%;
+  --accent-foreground: 42 45% 94%;
+  --destructive: 4 65% 57%;
+  --destructive-foreground: 42 45% 94%;
+}
+
+@layer base {
+  * { @apply border-border; }
+  html, body, #root { min-height: 100%; width: 100%; }
+  body { @apply bg-background text-foreground font-sans antialiased overflow-x-hidden; -webkit-tap-highlight-color: transparent; }
+  button, input, select { font: inherit; }
+}
+
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse-dot { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(.78); opacity: .65; } }
+@keyframes shimmer { from { background-position: -600px 0; } to { background-position: 600px 0; } }
+.animate-rise { animation: rise .55s cubic-bezier(.2,.75,.25,1) both; }
+.animate-rise-2 { animation: rise .55s .1s cubic-bezier(.2,.75,.25,1) both; }
+.animate-rise-3 { animation: rise .55s .2s cubic-bezier(.2,.75,.25,1) both; }
+.pulse-dot { animation: pulse-dot 2.1s ease-in-out infinite; }
+.skeleton { background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--card)) 50%, hsl(var(--muted)) 75%); background-size: 1200px 100%; animation: shimmer 1.5s infinite linear; }
+.mono { font-family: var(--app-font-mono); }
+.app-shell { min-height: 100dvh; background: radial-gradient(circle at 92% -10%, rgba(239, 183, 57, .18), transparent 28rem), hsl(var(--background)); }
+main { min-width: 0; max-width: 100%; }
+.grid-lines { background-image: linear-gradient(rgba(22,61,49,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(22,61,49,.035) 1px, transparent 1px); background-size: 28px 28px; }
+.leaf-mark { position: relative; }
+.leaf-mark:after { content: ''; position: absolute; width: 9px; height: 16px; border-radius: 100% 0 100% 0; background: hsl(var(--secondary)); transform: rotate(24deg); right: -7px; top: -5px; }
+.card-lift { box-shadow: var(--shadow-card); transition: transform .2s ease, box-shadow .2s ease; }
+.card-lift:hover { transform: translateY(-2px); box-shadow: 0 7px 0 rgba(22,61,49,.04), 0 22px 40px rgba(48,67,55,.11); }
+.route-line { background: repeating-linear-gradient(to bottom, hsl(var(--primary)) 0, hsl(var(--primary)) 5px, transparent 5px, transparent 10px); }
+.map-surface { background-color: #dce6d9; background-image: linear-gradient(28deg, transparent 47%, rgba(255,255,255,.75) 48%, rgba(255,255,255,.75) 50%, transparent 51%), linear-gradient(112deg, transparent 46%, rgba(163,188,163,.65) 47%, rgba(163,188,163,.65) 49%, transparent 50%), linear-gradient(rgba(72,112,83,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(72,112,83,.07) 1px, transparent 1px); background-size: 170px 130px, 230px 160px, 30px 30px, 30px 30px; }
+.map-road { position: absolute; height: 8px; background: rgba(255,255,255,.8); border: 1px solid rgba(83,116,86,.14); transform: rotate(-14deg); border-radius: 99px; }
+.real-map .leaflet-container { z-index: 0; background: #dce6d9; font-family: var(--app-font-sans); }
+.real-map .leaflet-control-zoom { border: 0 !important; box-shadow: var(--shadow-card); }
+.real-map .leaflet-control-zoom a { color: hsl(var(--primary)); border-color: hsl(var(--border)); }
+.daloago-map-marker { background: transparent; border: 0; }
+.daloago-map-marker span { display: block; width: 30px; height: 30px; margin: 2px auto 0; border: 4px solid hsl(var(--card)); border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 3px 8px rgba(22,61,49,.24); }
+.daloago-map-marker span:after { content: ''; display: block; width: 8px; height: 8px; margin: 7px auto; border-radius: 50%; background: hsl(var(--card)); }
+.daloago-map-marker-pickup span { background: hsl(var(--accent)); }
+.daloago-map-marker-destination span { background: hsl(var(--primary)); }
+.soft-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
+.soft-scroll::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 999px; }
+@media (prefers-reduced-motion: reduce) { *, *:before, *:after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+@media (max-width: 767px) {
+  html, body, #root, .app-shell, .app-shell > div, main { width: 100%; max-width: 100vw; min-width: 0; }
+  main { padding: 1rem; }
+  main > .grid { grid-template-columns: minmax(0, 1fr) !important; }
+  main .grid > *, main form, main form > div { min-width: 0; max-width: 100%; }
+  main h2, main h3, main p { overflow-wrap: anywhere; }
+  main [data-testid="form-book-ride"] .mt-6 { flex-wrap: wrap; }
+  main [data-testid="form-book-ride"] .mt-6 button { width: 100%; justify-content: center; }
+}

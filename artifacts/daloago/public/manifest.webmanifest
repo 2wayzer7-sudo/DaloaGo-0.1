@@ -1,0 +1,19 @@
+{
+  "name": "DaloaGo",
+  "short_name": "DaloaGo",
+  "description": "Réserver une course à Daloa.",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f3e9",
+  "theme_color": "#1f7358",
+  "icons": [
+    {
+      "src": "/daloago-logo.jpg",
+      "sizes": "192x192 512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}
