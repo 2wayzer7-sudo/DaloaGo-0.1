@@ -442,6 +442,7 @@ function PassengerHome() {
 }
 
 function DriverHome() {
+  const MIN_ACTIVE_DRIVERS_FOR_FILTERED_QUEUE = 25;
   const queryClient = useQueryClient();
   const tripQuery = useListTrips({ role: 'driver' }, { query: { staleTime: 10000, refetchInterval: 15000, queryKey: getListTripsQueryKey({ role: 'driver' }) } });
   const driverQuery = useListDrivers({ query: { staleTime: 30000, queryKey: getListDriversQueryKey() } });
@@ -455,7 +456,11 @@ function DriverHome() {
   const trips = tripQuery.data ?? [];
   const offers = offerQuery.data ?? [];
   const assignedTrips = trips.filter((trip) => trip.driverId === me?.id && ['accepted', 'arriving', 'in_progress'].includes(trip.status));
-  const queue = [...offers.map((offer) => offer.trip), ...assignedTrips.filter((trip) => !offers.some((offer) => offer.tripId === trip.id))];
+  const totalActive = (driverQuery.data ?? []).filter((driver) => driver.status === 'available' || driver.status === 'on_trip').length;
+  const showGlobalTripQueue = totalActive < MIN_ACTIVE_DRIVERS_FOR_FILTERED_QUEUE;
+  const queue = showGlobalTripQueue
+    ? trips
+    : [...offers.map((offer) => offer.trip), ...assignedTrips.filter((trip) => !offers.some((offer) => offer.tripId === trip.id))];
   const active = queue.find((trip) => trip.id === activeId) ?? queue[0];
   const activeOffer = offers.find((offer) => offer.tripId === active?.id);
   const changeStatus = (status: 'accepted' | 'arriving' | 'in_progress' | 'completed' | 'cancelled') => { if (!active) return; updateTrip.mutate({ id: active.id, data: { status } }, { onSuccess: (trip) => { setActiveId(trip.id); queryClient.setQueryData(getListTripsQueryKey({ role: 'driver' }), (old: Trip[] | undefined) => old?.map((item) => item.id === trip.id ? trip : item)); queryClient.invalidateQueries({ queryKey: getListDriversQueryKey() }); queryClient.invalidateQueries({ queryKey: getListTripsQueryKey({ role: 'admin' }) }); } }); };

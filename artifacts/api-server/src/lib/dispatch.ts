@@ -1,9 +1,10 @@
-import { and, asc, eq, gt, lt } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, lt } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { dispatchAttemptsTable, dispatchSettingsTable, driversTable, tripsTable, type DispatchSettings } from "@workspace/db/schema";
 import { logger } from "./logger";
 
 const DALOA_CENTER = { latitude: 6.877, longitude: -6.45 };
+const MIN_ACTIVE_DRIVERS_FOR_ADVANCED_FILTERING = 25;
 
 export const DEFAULT_DISPATCH_SETTINGS = {
   id: 1,
@@ -114,6 +115,11 @@ export async function advanceDispatch(tripId: number, settings?: DispatchSetting
         .from(dispatchAttemptsTable)
         .where(eq(dispatchAttemptsTable.status, "offered"));
       const availableDrivers = await tx.select().from(driversTable).where(eq(driversTable.status, "available"));
+      const [{ totalActive }] = await tx
+        .select({ totalActive: count() })
+        .from(driversTable)
+        .where(inArray(driversTable.status, ["available", "on_trip"]));
+      const useAdvancedFiltering = Number(totalActive) >= MIN_ACTIVE_DRIVERS_FOR_ADVANCED_FILTERING;
       const attemptedDriverIds = new Set(attemptedRows.map((row) => row.driverId));
       const pendingDriverIds = new Set(pendingDriverRows.map((row) => row.driverId));
       const radiusKm = dispatchSettings.searchRadiiKm[Math.min(stage, dispatchSettings.searchRadiiKm.length - 1)]
@@ -126,7 +132,7 @@ export async function advanceDispatch(tripId: number, settings?: DispatchSetting
 
       const candidates = availableDrivers
         .filter((driver) => driver.capacity > 0)
-        .filter((driver) => isFreshLocation(driver.lastLocationAt, now, dispatchSettings.gpsFreshnessSec))
+        .filter((driver) => !useAdvancedFiltering || isFreshLocation(driver.lastLocationAt, now, dispatchSettings.gpsFreshnessSec))
         .filter((driver) => !attemptedDriverIds.has(driver.id) && !pendingDriverIds.has(driver.id))
         .map((driver) => {
           const distanceKm = haversineKm(pickup, { latitude: driver.latitude, longitude: driver.longitude });
@@ -134,7 +140,7 @@ export async function advanceDispatch(tripId: number, settings?: DispatchSetting
           const freshnessSec = Math.max(0, (now.getTime() - driver.lastLocationAt.getTime()) / 1000);
           return { driver, distanceKm, etaMin, freshnessSec };
         })
-        .filter((candidate) => candidate.distanceKm <= radiusKm)
+        .filter((candidate) => !useAdvancedFiltering || candidate.distanceKm <= radiusKm)
         .sort((a, b) => (
           a.distanceKm - b.distanceKm
           || a.etaMin - b.etaMin
