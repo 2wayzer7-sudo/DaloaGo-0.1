@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
 import type { Server as HttpServer } from "node:http";
-import type { Socket } from "node:net";
+import type { Duplex } from "node:stream";
 
 type TripEventType = "trip.created" | "trip.updated";
 
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-const clients = new Set<Socket>();
+const clients = new Set<Duplex>();
 
 function frame(payload: string, opcode = 0x1): Buffer {
   const body = Buffer.from(payload);
@@ -26,7 +26,7 @@ function frame(payload: string, opcode = 0x1): Buffer {
   return Buffer.concat([header, body]);
 }
 
-function send(socket: Socket, payload: string, opcode = 0x1) {
+function send(socket: Duplex, payload: string, opcode = 0x1) {
   if (!socket.destroyed) socket.write(frame(payload, opcode));
 }
 
@@ -48,8 +48,7 @@ export function attachRealtime(server: HttpServer) {
       "",
       "",
     ].join("\r\n"));
-    socket.setNoDelay(true);
-    socket.setKeepAlive(true);
+
     clients.add(socket);
     socket.on("close", () => clients.delete(socket));
     socket.on("error", () => { clients.delete(socket); socket.destroy(); });
