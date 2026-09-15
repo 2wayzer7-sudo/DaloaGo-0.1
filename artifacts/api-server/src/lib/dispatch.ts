@@ -2,6 +2,7 @@ import { and, asc, count, eq, gt, inArray, lt } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { dispatchAttemptsTable, dispatchSettingsTable, driversTable, tripsTable, type DispatchSettings } from "@workspace/db/schema";
 import { logger } from "./logger";
+import { publishTripEvent } from "./realtime";
 
 const DALOA_CENTER = { latitude: 6.877, longitude: -6.45 };
 const MIN_ACTIVE_DRIVERS_FOR_ADVANCED_FILTERING = 25;
@@ -220,7 +221,13 @@ export async function runDispatchSweep() {
 
   await Promise.all(activeTrips.map(async ({ id }) => {
     try {
-      await advanceDispatch(id, settings);
+      const result = await advanceDispatch(id, settings);
+      if (result.kind !== "offer" && result.kind !== "fare_proposal") return;
+      const [trip] = await db
+        .select()
+        .from(tripsTable)
+        .where(eq(tripsTable.id, id));
+      if (trip) publishTripEvent("trip.updated", trip);
     } catch (error) {
       logger.error({ err: error, tripId: id }, "Dispatch sweep failed");
     }
