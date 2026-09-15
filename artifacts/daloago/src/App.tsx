@@ -323,8 +323,7 @@ function MapPanel({ pickup, destination, userLocation, mode, locationStatus, onS
   return <RealMap pickup={pickup} destination={destination} userLocation={userLocation} mode={mode} locationStatus={locationStatus} onSelect={onSelect} onModeChange={onModeChange} onLocate={onLocate} />;
 }
 
-function TripTracking({ trip, onCancel, onFareResponse, fareResponsePending }: { trip: Trip; onCancel: () => void; onFareResponse: (decision: 'accept' | 'reject') => void; fareResponsePending: boolean }) {
-  const [canceling, setCanceling] = useState(false);
+function TripTracking({ trip, onCancel, cancelPending, onFareResponse, fareResponsePending }: { trip: Trip; onCancel: () => void; cancelPending: boolean; onFareResponse: (decision: 'accept' | 'reject') => void; fareResponsePending: boolean }) {
   const status = trip.status;
   const steps: Status[] = ['requested', 'accepted', 'arriving', 'in_progress'];
   const currentIndex = Math.max(0, steps.indexOf(status));
@@ -333,7 +332,7 @@ function TripTracking({ trip, onCancel, onFareResponse, fareResponsePending }: {
      {status !== 'completed' && status !== 'cancelled' && <div className="my-8 flex items-start">{steps.map((step, index) => <div key={step} className="flex flex-1 items-start"><div className="relative flex flex-col items-center"><span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${index <= currentIndex ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>{index < currentIndex ? <Check className="h-4 w-4" /> : index + 1}</span><span className="mt-2 w-20 text-center text-[10px] font-semibold leading-tight text-muted-foreground">{step === 'in_progress' ? 'En route' : step === 'requested' ? 'Demandée' : step === 'accepted' ? 'Assignée' : 'En approche'}</span></div>{index < steps.length - 1 && <div className={`mt-3 h-0.5 flex-1 ${index < currentIndex ? 'bg-primary' : 'bg-border'}`} />}</div>)}</div>}
      {trip.driverName ? <div className="flex items-center gap-3 rounded-2xl bg-muted/70 p-3"><div className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary text-sm font-bold text-secondary-foreground">{trip.driverName.slice(0, 2).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="text-sm font-bold">{trip.driverName}</p><p className="text-xs text-muted-foreground">{trip.vehicle || 'Véhicule'} · Votre chauffeur est à proximité</p></div><button className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground" aria-label="Appeler le chauffeur" data-testid="button-call-driver"><Phone className="h-4 w-4" /></button></div> : <div className="flex items-center gap-3 rounded-2xl bg-secondary/15 p-4"><div className="pulse-dot flex h-9 w-9 items-center justify-center rounded-full bg-secondary"><Radio className="h-4 w-4 text-secondary-foreground" /></div><p className="text-sm font-semibold">Nous recherchons un chauffeur à proximité.</p></div>}
       {trip.fareProposalStatus === 'pending' && trip.fareProposalAmount ? <div className="my-5 rounded-2xl border border-secondary/60 bg-secondary/15 p-4" data-testid="card-fare-proposal"><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-secondary-foreground"><WalletCards className="h-4 w-4" /></span><div className="min-w-0"><p className="text-sm font-bold">Le tarif doit être ajusté</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Aucun chauffeur n’est encore disponible dans le rayon actuel. Acceptez une hausse de {formatMoney(trip.fareProposalAmount)} pour continuer la recherche.</p><div className="mt-3 flex gap-2"><button onClick={() => onFareResponse('accept')} disabled={fareResponsePending} className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground disabled:opacity-50" data-testid="button-accept-fare-increase">{fareResponsePending ? 'Envoi…' : 'Accepter la hausse'}</button><button onClick={() => onFareResponse('reject')} disabled={fareResponsePending} className="rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold text-foreground disabled:opacity-50" data-testid="button-reject-fare-increase">Garder le tarif</button></div></div></div></div> : null}
-      <div className="mt-5 flex items-center justify-between border-t border-border pt-4"><div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tarif estimé</p><p className="mono mt-1 text-xl font-bold">{formatMoney(trip.fare || 1500)}</p>{trip.initialFare !== trip.fare && <p className="mt-1 text-[10px] text-muted-foreground">Tarif initial : {formatMoney(trip.initialFare)}</p>}</div>{status !== 'completed' && status !== 'cancelled' && <button onClick={() => { setCanceling(true); onCancel(); }} disabled={canceling} className="text-xs font-bold text-destructive hover:underline disabled:opacity-50" data-testid="button-cancel-trip">{canceling ? 'Annulation…' : 'Annuler la course'}</button>}</div>
+       <div className="mt-5 flex items-center justify-between border-t border-border pt-4"><div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tarif estimé</p><p className="mono mt-1 text-xl font-bold">{formatMoney(trip.fare || 1500)}</p>{trip.initialFare !== trip.fare && <p className="mt-1 text-[10px] text-muted-foreground">Tarif initial : {formatMoney(trip.initialFare)}</p>}</div>{status !== 'completed' && status !== 'cancelled' && <button onClick={onCancel} disabled={cancelPending} className="text-xs font-bold text-destructive hover:underline disabled:opacity-50" data-testid="button-cancel-trip">{cancelPending ? 'Annulation…' : 'Annuler la course'}</button>}</div>
   </div>;
 }
 
@@ -354,6 +353,15 @@ function PassengerHome() {
   const trips = tripsQuery.data ?? [];
   const currentTrip = currentTripQuery.data ?? trips.find((item) => item.id === currentTripId);
   const recentTrips = trips.filter((item) => item.id !== currentTripId).slice(0, 3);
+  const resetBooking = useCallback(() => {
+    setCurrentTripId(undefined);
+    setPickup('');
+    setDestination('');
+    setPickupPoint(undefined);
+    setDestinationPoint(undefined);
+    setSelectionMode('pickup');
+    setLocationStatus('Demande de position…');
+  }, []);
   const requestLocation = useCallback(() => {
     if (!navigator.geolocation) { setLocationStatus('Géolocalisation indisponible'); return; }
     setLocationStatus('Recherche de votre position…');
@@ -436,9 +444,21 @@ function PassengerHome() {
     }
   }, [pickup, destination, pickupPoint, destinationPoint]);
   const handleBooked = (trip: Trip) => { setCurrentTripId(trip.id); queryClient.setQueryData(getGetTripQueryKey(trip.id), trip); queryClient.invalidateQueries({ queryKey: getListTripsQueryKey({ role: 'passenger' }) }); };
-  const cancel = () => { if (!currentTripId) return; updateTrip.mutate({ id: currentTripId, data: { status: 'cancelled' } }, { onSuccess: (trip) => { queryClient.setQueryData(getGetTripQueryKey(currentTripId), trip); queryClient.invalidateQueries({ queryKey: getListTripsQueryKey({ role: 'passenger' }) }); } }); };
+  useEffect(() => {
+    if (currentTripId && currentTrip?.status === 'cancelled') resetBooking();
+  }, [currentTrip, currentTripId, resetBooking]);
+  const cancel = () => {
+    if (!currentTripId) return;
+    updateTrip.mutate({ id: currentTripId, data: { status: 'cancelled', reason: 'annulee_par_passager' } }, {
+      onSuccess: (trip) => {
+        queryClient.setQueryData(getGetTripQueryKey(trip.id), trip);
+        queryClient.invalidateQueries({ queryKey: getListTripsQueryKey({ role: 'passenger' }) });
+        if (trip.status === 'cancelled') resetBooking();
+      },
+    });
+  };
   const respondToFare = (decision: 'accept' | 'reject') => { if (!currentTripId) return; respondToFareIncrease.mutate({ id: currentTripId, data: { decision } }, { onSuccess: (result) => { queryClient.setQueryData(getGetTripQueryKey(currentTripId), result.trip); queryClient.invalidateQueries({ queryKey: getListTripsQueryKey({ role: 'passenger' }) }); } }); };
-  return <AppShell title="Bonjour, Mireille" eyebrow="Passager / Réserver une course"><div className="grid gap-6 xl:grid-cols-[minmax(420px,0.8fr)_1.2fr]"><div className="space-y-6"><div className="animate-rise rounded-[24px] bg-primary p-6 text-primary-foreground shadow-[0_8px_0_hsl(160_56%_20%)] md:p-8"><div className="flex items-center justify-between"><div><p className="mono text-[10px] font-bold uppercase tracking-[.2em] text-primary-foreground/55">Votre ville. Votre trajet.</p><h2 className="mt-3 max-w-sm text-[34px] font-bold leading-[.98] tracking-[-.07em]">Déplacez-vous à Daloa en toute confiance.</h2></div><Sparkles className="h-7 w-7 text-secondary" /></div><p className="mt-5 max-w-sm text-sm leading-relaxed text-primary-foreground/70">Demandez une course locale, suivez son arrivée et rejoignez votre destination sereinement.</p></div>{currentTrip ? <TripTracking trip={currentTrip} onCancel={cancel} onFareResponse={respondToFare} fareResponsePending={respondToFareIncrease.isPending} /> : <BookingCard onBooked={handleBooked} pickup={pickup} destination={destination} pickupPoint={pickupPoint} destinationPoint={destinationPoint} onPickupChange={handlePickupChange} onDestinationChange={handleDestinationChange} onLocationsReady={resolveLocationsForBooking} />}</div><div className="animate-rise-2 space-y-6"><MapPanel pickup={pickupPoint} destination={destinationPoint} userLocation={userLocation} mode={selectionMode} locationStatus={locationStatus} onSelect={selectMapPoint} onModeChange={setSelectionMode} onLocate={requestLocation} /><div className="rounded-[24px] border border-border bg-card p-5" data-testid="section-recent-trips"><div className="mb-4 flex items-center justify-between"><div><p className="mono text-[10px] font-bold uppercase tracking-[.18em] text-muted-foreground">Votre activité</p><h3 className="mt-1 text-lg font-bold">Courses récentes</h3></div><span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-bold text-muted-foreground">{trips.length} au total</span></div>{tripsQuery.isLoading ? <div className="space-y-3"><SkeletonBlock className="h-14" /><SkeletonBlock className="h-14" /></div> : tripsQuery.isError ? <ErrorState retry={() => tripsQuery.refetch()} label="Vos courses prennent un détour" /> : recentTrips.length === 0 ? <EmptyState title="Votre historique est vide" copy="Vos courses terminées apparaîtront ici." /> : <div className="space-y-1">{recentTrips.map((trip) => <button key={trip.id} onClick={() => setCurrentTripId(trip.id)} className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-muted" data-testid={`button-trip-history-${trip.id}`}><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary/20 text-primary"><RouteIcon className="h-4 w-4" /></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{trip.pickup} <span className="font-normal text-muted-foreground">vers</span> {trip.destination}</p><p className="mt-0.5 text-[11px] text-muted-foreground">{timeAgo(trip.requestedAt)} · {formatMoney(trip.fare)}</p></div><StatusBadge status={trip.status} /></button>)}</div>}</div></div></div></AppShell>;
+  return <AppShell title="Bonjour, Mireille" eyebrow="Passager / Réserver une course"><div className="grid gap-6 xl:grid-cols-[minmax(420px,0.8fr)_1.2fr]"><div className="space-y-6"><div className="animate-rise rounded-[24px] bg-primary p-6 text-primary-foreground shadow-[0_8px_0_hsl(160_56%_20%)] md:p-8"><div className="flex items-center justify-between"><div><p className="mono text-[10px] font-bold uppercase tracking-[.2em] text-primary-foreground/55">Votre ville. Votre trajet.</p><h2 className="mt-3 max-w-sm text-[34px] font-bold leading-[.98] tracking-[-.07em]">Déplacez-vous à Daloa en toute confiance.</h2></div><Sparkles className="h-7 w-7 text-secondary" /></div><p className="mt-5 max-w-sm text-sm leading-relaxed text-primary-foreground/70">Demandez une course locale, suivez son arrivée et rejoignez votre destination sereinement.</p></div>{currentTrip ? <TripTracking trip={currentTrip} onCancel={cancel} cancelPending={updateTrip.isPending} onFareResponse={respondToFare} fareResponsePending={respondToFareIncrease.isPending} /> : <BookingCard onBooked={handleBooked} pickup={pickup} destination={destination} pickupPoint={pickupPoint} destinationPoint={destinationPoint} onPickupChange={handlePickupChange} onDestinationChange={handleDestinationChange} onLocationsReady={resolveLocationsForBooking} />}</div><div className="animate-rise-2 space-y-6"><MapPanel pickup={pickupPoint} destination={destinationPoint} userLocation={userLocation} mode={selectionMode} locationStatus={locationStatus} onSelect={selectMapPoint} onModeChange={setSelectionMode} onLocate={requestLocation} /><div className="rounded-[24px] border border-border bg-card p-5" data-testid="section-recent-trips"><div className="mb-4 flex items-center justify-between"><div><p className="mono text-[10px] font-bold uppercase tracking-[.18em] text-muted-foreground">Votre activité</p><h3 className="mt-1 text-lg font-bold">Courses récentes</h3></div><span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-bold text-muted-foreground">{trips.length} au total</span></div>{tripsQuery.isLoading ? <div className="space-y-3"><SkeletonBlock className="h-14" /><SkeletonBlock className="h-14" /></div> : tripsQuery.isError ? <ErrorState retry={() => tripsQuery.refetch()} label="Vos courses prennent un détour" /> : recentTrips.length === 0 ? <EmptyState title="Votre historique est vide" copy="Vos courses terminées apparaîtront ici." /> : <div className="space-y-1">{recentTrips.map((trip) => <button key={trip.id} onClick={() => setCurrentTripId(trip.id)} className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-muted" data-testid={`button-trip-history-${trip.id}`}><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary/20 text-primary"><RouteIcon className="h-4 w-4" /></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{trip.pickup} <span className="font-normal text-muted-foreground">vers</span> {trip.destination}</p><p className="mt-0.5 text-[11px] text-muted-foreground">{timeAgo(trip.requestedAt)} · {formatMoney(trip.fare)}</p></div><StatusBadge status={trip.status} /></button>)}</div>}</div></div></div></AppShell>;
 }
 
 function DriverHome() {
@@ -862,8 +882,17 @@ function RealtimeTripSync() {
     let reconnectTimer: number | undefined;
     let stopped = false;
 
-    const refreshCourseQueries = (tripId?: number) => {
-      if (tripId) queryClient.invalidateQueries({ queryKey: getGetTripQueryKey(tripId) });
+    const refreshCourseQueries = (trip?: Trip) => {
+      if (trip) {
+        queryClient.setQueryData(getGetTripQueryKey(trip.id), trip);
+        for (const role of ["passenger", "driver", "admin"] as const) {
+          queryClient.setQueryData<Trip[] | undefined>(getListTripsQueryKey({ role }), (current) => {
+            if (!current) return current;
+            return current.map((item) => item.id === trip.id ? trip : item);
+          });
+        }
+        queryClient.invalidateQueries({ queryKey: getGetTripQueryKey(trip.id) });
+      }
       queryClient.invalidateQueries({ queryKey: getListTripsQueryKey({ role: "passenger" }) });
       queryClient.invalidateQueries({ queryKey: getListTripsQueryKey({ role: "driver" }) });
       queryClient.invalidateQueries({ queryKey: getListTripsQueryKey({ role: "admin" }) });
@@ -876,9 +905,9 @@ function RealtimeTripSync() {
       socket.onmessage = (event) => {
         if (typeof event.data !== "string") return;
         try {
-          const message = JSON.parse(event.data) as { type?: string; trip?: { id?: number } };
+          const message = JSON.parse(event.data) as { type?: string; trip?: Trip };
           if (message.type === "trip.created" || message.type === "trip.updated") {
-            refreshCourseQueries(message.trip?.id);
+            refreshCourseQueries(message.trip);
           }
         } catch {
           // Ignore malformed realtime frames and keep the connection alive.

@@ -1,5 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import {
   dispatchAttemptsTable,
   driversTable,
@@ -247,11 +247,41 @@ export async function collectTelemetry() {
 }
 
 let telemetryTimer: NodeJS.Timeout | undefined;
+const TELEMETRY_WORKER_LOCK_KEY = "734002";
+
+async function runTelemetryWorkerCycle() {
+  let lockAcquired = false;
+
+  try {
+    const client = await pool.connect();
+    try {
+      const result = await client.query<{ locked: boolean }>(
+        "SELECT pg_try_advisory_lock($1::bigint) AS locked",
+        [TELEMETRY_WORKER_LOCK_KEY],
+      );
+      lockAcquired = result.rows[0]?.locked === true;
+      if (!lockAcquired) return;
+
+      await collectTelemetry();
+    } finally {
+      if (lockAcquired) {
+        try {
+          await client.query("SELECT pg_advisory_unlock($1::bigint)", [TELEMETRY_WORKER_LOCK_KEY]);
+        } catch (error) {
+          logger.warn({ err: error }, "Telemetry worker lock release failed");
+        }
+      }
+      client.release();
+    }
+  } catch (error) {
+    logger.error({ err: error }, "Telemetry worker cycle failed");
+  }
+}
 
 export function startTelemetryWorker() {
   if (telemetryTimer) return;
   const run = () => {
-    collectTelemetry().catch((error) => logger.error({ err: error }, "Telemetry collection failed"));
+    void runTelemetryWorkerCycle();
   };
   run();
   telemetryTimer = setInterval(run, 15000);

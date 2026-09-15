@@ -1,3 +1,6 @@
 - [Orval and Zod integer compatibility](orval-zod-integers.md) — OpenAPI integer fields can emit Zod 4-only helpers in this workspace.
 - [Dispatch offer concurrency](dispatch-concurrency.md) — Lock the driver row before creating an offer and recheck pending offers inside the transaction.
 - [Telemetry boundary](telemetry-boundary.md) — Observe dispatch and trip records from an independent worker; keep unknown real-world metrics nullable.
+- [GitHub import and local startup](github-import-and-local-startup.md) — Align the workspace to the verified main commit and prepare the dev DB before starting DaloaGo.
+- [Stale demo GPS data](stale-demo-gps.md) — Persistent dev databases can make seeded driver locations too old for dispatch acceptance.
+- [Autoscale worker locks](autoscale-worker-locks.md) — Use distinct PostgreSQL session advisory locks per periodic worker and release them after each cycle.

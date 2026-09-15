@@ -12,7 +12,7 @@ import {
   UpdateTripStatusResponse,
 } from "@workspace/api-zod";
 import { db } from "@workspace/db";
-import { activityTable, driversTable, tripsTable, type Trip } from "@workspace/db/schema";
+import { activityTable, dispatchAttemptsTable, driversTable, tripsTable, type Trip } from "@workspace/db/schema";
 import { advanceDispatch } from "../lib/dispatch";
 import { ensureSeedData } from "../lib/seed";
 import { generateRepositionRecommendation, logRepositionError } from "../lib/reposition";
@@ -37,6 +37,15 @@ const activityStatusLabels: Record<string, string> = {
   in_progress: "en cours",
   completed: "terminée",
   cancelled: "annulée",
+};
+
+const allowedStatusTransitions: Record<string, readonly string[]> = {
+  requested: ["cancelled"],
+  accepted: ["arriving", "cancelled"],
+  arriving: ["in_progress", "cancelled"],
+  in_progress: ["completed", "cancelled"],
+  completed: [],
+  cancelled: [],
 };
 
 function serializeTrip(trip: Trip) {
@@ -151,62 +160,99 @@ router.patch("/trips/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [current] = await db
-    .select()
-    .from(tripsTable)
-    .where(eq(tripsTable.id, params.data.id));
-  if (!current) {
+  const result = await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(tripsTable)
+      .where(eq(tripsTable.id, params.data.id))
+      .for("update");
+    if (!current) return { kind: "not_found" as const };
+
+    const allowedNextStatuses = allowedStatusTransitions[current.status] ?? [];
+    if (!allowedNextStatuses.includes(parsed.data.status)) {
+      return {
+        kind: "invalid_transition" as const,
+        currentStatus: current.status,
+        requestedStatus: parsed.data.status,
+      };
+    }
+
+    if (parsed.data.status === "accepted" && !current.driverId) {
+      return { kind: "accepted_without_driver" as const };
+    }
+
+    const now = new Date();
+    if (parsed.data.status === "completed" || parsed.data.status === "cancelled") {
+      if (current.driverId) {
+        await tx
+          .update(driversTable)
+          .set({ status: "available" })
+          .where(eq(driversTable.id, current.driverId));
+      }
+      if (parsed.data.status === "cancelled") {
+        await tx
+          .update(dispatchAttemptsTable)
+          .set({ status: "cancelled", respondedAt: now })
+          .where(and(
+            eq(dispatchAttemptsTable.tripId, current.id),
+            eq(dispatchAttemptsTable.status, "offered"),
+          ));
+      }
+    }
+
+    const [trip] = await tx
+      .update(tripsTable)
+      .set({
+        status: parsed.data.status,
+        completedAt: parsed.data.status === "completed" ? now : current.completedAt,
+        cancellationReason: parsed.data.status === "cancelled"
+          ? parsed.data.reason ?? "non_precisee"
+          : current.cancellationReason,
+      })
+      .where(eq(tripsTable.id, current.id))
+      .returning();
+    if (!trip) throw new Error("Trip status could not be saved");
+
+    await tx.insert(activityTable).values({
+      type: parsed.data.status === "completed" ? "trip_completed" : "trip_requested",
+      title: parsed.data.status === "completed" ? "Course terminée" : "Course mise à jour",
+      description: `Course n°${current.id} · ${activityStatusLabels[parsed.data.status]}`,
+    });
+
+    return {
+      kind: "updated" as const,
+      trip,
+      previousStatus: current.status,
+    };
+  });
+
+  if (result.kind === "not_found") {
     res.status(404).json({ error: "Trip not found" });
     return;
   }
-
-  let driverId = current.driverId;
-  let driverName = current.driverName;
-  let vehicle = current.vehicle;
-
-  if (parsed.data.status === "accepted" && !driverId) {
+  if (result.kind === "accepted_without_driver") {
     res.status(409).json({ error: "A trip must be accepted through a dispatch offer" });
     return;
   }
-
-  if ((parsed.data.status === "completed" || parsed.data.status === "cancelled") && driverId) {
-    await db
-      .update(driversTable)
-      .set({ status: "available" })
-      .where(eq(driversTable.id, driverId));
+  if (result.kind === "invalid_transition") {
+    res.status(409).json({
+      error: `Invalid trip status transition: ${result.currentStatus} -> ${result.requestedStatus}`,
+      currentStatus: result.currentStatus,
+      requestedStatus: result.requestedStatus,
+    });
+    return;
   }
-
-  const [trip] = await db
-    .update(tripsTable)
-    .set({
-      status: parsed.data.status,
-      driverId,
-      driverName,
-      vehicle,
-      completedAt: parsed.data.status === "completed" ? new Date() : current.completedAt,
-      cancellationReason: parsed.data.status === "cancelled"
-        ? parsed.data.reason ?? "non_precisee"
-        : current.cancellationReason,
-    })
-    .where(eq(tripsTable.id, params.data.id))
-    .returning();
-
-  await db.insert(activityTable).values({
-    type: parsed.data.status === "completed" ? "trip_completed" : "trip_requested",
-    title: parsed.data.status === "completed" ? "Course terminée" : "Course mise à jour",
-    description: `Course n°${params.data.id} · ${activityStatusLabels[parsed.data.status]}`,
-  });
 
   await recordTripStatus({
-    trip,
-    previousStatus: current.status,
+    trip: result.trip,
+    previousStatus: result.previousStatus,
     reason: parsed.data.reason,
   });
-  if (parsed.data.status === "completed" && trip.driverId) {
-    generateRepositionRecommendation({ tripId: trip.id, driverId: trip.driverId }).catch(logRepositionError);
+  if (parsed.data.status === "completed" && result.trip.driverId) {
+    generateRepositionRecommendation({ tripId: result.trip.id, driverId: result.trip.driverId }).catch(logRepositionError);
   }
-  publishTripEvent("trip.updated", trip);
-  res.json(UpdateTripStatusResponse.parse(serializeTrip(trip)));
+  publishTripEvent("trip.updated", result.trip);
+  res.json(UpdateTripStatusResponse.parse(serializeTrip(result.trip)));
 });
 
 export default router;

@@ -1,5 +1,5 @@
 import { and, asc, count, eq, gt, inArray, lt } from "drizzle-orm";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { dispatchAttemptsTable, dispatchSettingsTable, driversTable, tripsTable, type DispatchSettings } from "@workspace/db/schema";
 import { logger } from "./logger";
 import { publishTripEvent } from "./realtime";
@@ -26,6 +26,7 @@ type DispatchResult =
 
 const inFlightTrips = new Set<number>();
 let dispatchTimer: NodeJS.Timeout | undefined;
+const DISPATCH_WORKER_LOCK_KEY = "734001";
 
 export async function getDispatchSettings(): Promise<DispatchSettings> {
   const [existing] = await db.select().from(dispatchSettingsTable).where(eq(dispatchSettingsTable.id, 1));
@@ -234,12 +235,41 @@ export async function runDispatchSweep() {
   }));
 }
 
+async function runDispatchWorkerCycle() {
+  let lockAcquired = false;
+
+  try {
+    const client = await pool.connect();
+    try {
+      const result = await client.query<{ locked: boolean }>(
+        "SELECT pg_try_advisory_lock($1::bigint) AS locked",
+        [DISPATCH_WORKER_LOCK_KEY],
+      );
+      lockAcquired = result.rows[0]?.locked === true;
+      if (!lockAcquired) return;
+
+      await runDispatchSweep();
+    } finally {
+      if (lockAcquired) {
+        try {
+          await client.query("SELECT pg_advisory_unlock($1::bigint)", [DISPATCH_WORKER_LOCK_KEY]);
+        } catch (error) {
+          logger.warn({ err: error }, "Dispatch worker lock release failed");
+        }
+      }
+      client.release();
+    }
+  } catch (error) {
+    logger.error({ err: error }, "Dispatch worker cycle failed");
+  }
+}
+
 export function startDispatchWorker() {
   if (dispatchTimer) return;
   dispatchTimer = setInterval(() => {
-    void runDispatchSweep();
+    void runDispatchWorkerCycle();
   }, 15000);
   dispatchTimer.unref();
-  void runDispatchSweep();
+  void runDispatchWorkerCycle();
   logger.info("Dispatch worker started");
 }
