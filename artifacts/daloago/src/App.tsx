@@ -444,10 +444,10 @@ function PassengerHome() {
 function DriverHome() {
   const MIN_ACTIVE_DRIVERS_FOR_FILTERED_QUEUE = 25;
   const queryClient = useQueryClient();
-  const tripQuery = useListTrips({ role: 'driver' }, { query: { staleTime: 10000, refetchInterval: 15000, queryKey: getListTripsQueryKey({ role: 'driver' }) } });
+  const tripQuery = useListTrips({ role: 'driver' }, { query: { staleTime: 10000, queryKey: getListTripsQueryKey({ role: 'driver' }) } });
   const driverQuery = useListDrivers({ query: { staleTime: 30000, queryKey: getListDriversQueryKey() } });
   const me = (driverQuery.data ?? []).find((driver) => driver.status === 'available') ?? driverQuery.data?.[0];
-  const offerQuery = useListDispatchOffers({ driverId: me?.id ?? 0 }, { query: { enabled: Boolean(me?.id), staleTime: 3000, refetchInterval: 5000, queryKey: getListDispatchOffersQueryKey({ driverId: me?.id ?? 0 }) } });
+  const offerQuery = useListDispatchOffers({ driverId: me?.id ?? 0 }, { query: { enabled: Boolean(me?.id), staleTime: 3000, queryKey: getListDispatchOffersQueryKey({ driverId: me?.id ?? 0 }) } });
   const updateTrip = useUpdateTripStatus();
   const respondOfferMutation = useRespondToDispatchOffer();
   const updateLocation = useUpdateDriverLocation();
@@ -509,7 +509,7 @@ function InfoRow({ icon: Icon, label, value }: { icon: typeof MapPin; label: str
 function Operations() {
   const summaryQuery = useGetDashboardSummary({ query: { staleTime: 15000, refetchInterval: 20000, queryKey: getGetDashboardSummaryQueryKey() } });
   const activityQuery = useGetDashboardActivity({ query: { staleTime: 15000, refetchInterval: 20000, queryKey: getGetDashboardActivityQueryKey() } });
-  const tripsQuery = useListTrips({ role: 'admin' }, { query: { staleTime: 15000, refetchInterval: 20000, queryKey: getListTripsQueryKey({ role: 'admin' }) } });
+  const tripsQuery = useListTrips({ role: 'admin' }, { query: { staleTime: 15000, queryKey: getListTripsQueryKey({ role: 'admin' }) } });
   const driversQuery = useListDrivers({ query: { staleTime: 15000, refetchInterval: 20000, queryKey: getListDriversQueryKey() } });
   const summary = summaryQuery.data;
   const trips = tripsQuery.data ?? [];
@@ -851,8 +851,57 @@ function AppRouter() {
   return <ErrorBoundary resetKey={location}><Switch><Route path="/" component={PassengerHome} /><Route path="/driver" component={DriverHome} /><Route path="/operations" component={Operations} /><Route component={NotFound} /></Switch></ErrorBoundary>;
 }
 
+
+function RealtimeTripSync() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const apiBase = (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/$/, "");
+    const socketUrl = apiBase.replace(/^http/, "ws") + "/api/realtime";
+    let socket: WebSocket | undefined;
+    let reconnectTimer: number | undefined;
+    let stopped = false;
+
+    const refreshCourseQueries = (tripId?: number) => {
+      if (tripId) queryClient.invalidateQueries({ queryKey: getGetTripQueryKey(tripId) });
+      queryClient.invalidateQueries({ queryKey: getListTripsQueryKey({ role: "passenger" }) });
+      queryClient.invalidateQueries({ queryKey: getListTripsQueryKey({ role: "driver" }) });
+      queryClient.invalidateQueries({ queryKey: getListTripsQueryKey({ role: "admin" }) });
+      queryClient.invalidateQueries({ queryKey: getListDriversQueryKey() });
+      queryClient.invalidateQueries({ predicate: ({ queryKey }) => String(queryKey[0]).startsWith("/api/dispatch/offers") });
+    };
+
+    const connect = () => {
+      socket = new WebSocket(socketUrl);
+      socket.onmessage = (event) => {
+        if (typeof event.data !== "string") return;
+        try {
+          const message = JSON.parse(event.data) as { type?: string; trip?: { id?: number } };
+          if (message.type === "trip.created" || message.type === "trip.updated") {
+            refreshCourseQueries(message.trip?.id);
+          }
+        } catch {
+          // Ignore malformed realtime frames and keep the connection alive.
+        }
+      };
+      socket.onclose = () => {
+        if (!stopped) reconnectTimer = window.setTimeout(connect, 1500);
+      };
+      socket.onerror = () => socket?.close();
+    };
+
+    connect();
+    return () => {
+      stopped = true;
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      socket?.close();
+    };
+  }, [queryClient]);
+
+  return null;
+}
 function App() {
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><AppRouter /></WouterRouter><Toaster /><InstallPrompt /></TooltipProvider></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><RealtimeTripSync /><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><AppRouter /></WouterRouter><Toaster /><InstallPrompt /></TooltipProvider></QueryClientProvider>;
 }
 
 export default App;
