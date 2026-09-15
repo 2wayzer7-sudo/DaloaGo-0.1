@@ -17,6 +17,7 @@ import { advanceDispatch } from "../lib/dispatch";
 import { ensureSeedData } from "../lib/seed";
 import { generateRepositionRecommendation, logRepositionError } from "../lib/reposition";
 import { recordTripRequest, recordTripStatus } from "../lib/telemetry";
+import { publishTripEvent } from "../lib/realtime";
 
 const router: IRouter = Router();
 
@@ -111,6 +112,7 @@ router.post("/trips", async (req, res): Promise<void> => {
 
   await recordTripRequest(trip);
   await advanceDispatch(trip.id);
+  publishTripEvent("trip.created", trip);
   res.status(201).json(CreateTripResponse.parse(serializeTrip(trip)));
 });
 
@@ -203,6 +205,7 @@ router.patch("/trips/:id", async (req, res): Promise<void> => {
   if (parsed.data.status === "completed" && trip.driverId) {
     generateRepositionRecommendation({ tripId: trip.id, driverId: trip.driverId }).catch(logRepositionError);
   }
+  publishTripEvent("trip.updated", trip);
   res.json(UpdateTripStatusResponse.parse(serializeTrip(trip)));
 });
 
