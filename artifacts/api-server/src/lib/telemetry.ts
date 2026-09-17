@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, exists, gte, inArray, isNull, notExists, or, sql } from "drizzle-orm";
 import { db, pool } from "@workspace/db";
 import {
   dispatchAttemptsTable,
@@ -13,6 +13,9 @@ import {
 import { logger } from "./logger";
 
 const EARTH_RADIUS_KM = 6371;
+const ACTIVE_TRIP_STATUSES = ["requested", "accepted", "arriving", "in_progress"] as const;
+const TERMINAL_TRIP_STATUSES = ["completed", "cancelled"] as const;
+const RECENT_TERMINAL_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function distanceKm(
   latitude: number,
@@ -227,7 +230,54 @@ async function recordDispatchAttemptTelemetry(attempt: typeof dispatchAttemptsTa
 }
 
 export async function collectTelemetry() {
-  const trips = await db.select().from(tripsTable);
+  const recentTerminalSince = new Date(Date.now() - RECENT_TERMINAL_WINDOW_MS);
+  const recentTerminalEventExists = exists(
+    db
+      .select({ id: tripEventsTable.id })
+      .from(tripEventsTable)
+      .where(and(
+        eq(tripEventsTable.tripId, tripsTable.id),
+        inArray(tripEventsTable.type, ["trip_completed", "trip_cancelled"]),
+        gte(tripEventsTable.occurredAt, recentTerminalSince),
+      )),
+  );
+  const expectedEventMissing = or(
+    notExists(
+      db
+        .select({ id: tripEventsTable.id })
+        .from(tripEventsTable)
+        .where(and(
+          eq(tripEventsTable.tripId, tripsTable.id),
+          eq(tripEventsTable.eventKey, sql`concat('trip:', ${tripsTable.id}, ':requested')`),
+        )),
+    ),
+    notExists(
+      db
+        .select({ id: tripEventsTable.id })
+        .from(tripEventsTable)
+        .where(and(
+          eq(tripEventsTable.tripId, tripsTable.id),
+          or(
+            and(eq(tripsTable.status, "completed"), eq(tripEventsTable.type, "trip_completed")),
+            and(eq(tripsTable.status, "cancelled"), eq(tripEventsTable.type, "trip_cancelled")),
+          ),
+        )),
+    ),
+  );
+  const trips = await db
+    .select()
+    .from(tripsTable)
+    .where(or(
+      inArray(tripsTable.status, ACTIVE_TRIP_STATUSES),
+      and(
+        inArray(tripsTable.status, TERMINAL_TRIP_STATUSES),
+        or(
+          and(eq(tripsTable.status, "completed"), gte(tripsTable.completedAt, recentTerminalSince)),
+          recentTerminalEventExists,
+          expectedEventMissing,
+        ),
+      ),
+    ));
   for (const trip of trips) {
     await ensureTripAnalytics(trip);
     await recordTripEvent({
@@ -238,7 +288,13 @@ export async function collectTelemetry() {
     });
   }
 
-  const attempts = await db.select().from(dispatchAttemptsTable);
+  const tripIds = trips.map((trip) => trip.id);
+  const attempts = tripIds.length === 0
+    ? []
+    : await db
+      .select()
+      .from(dispatchAttemptsTable)
+      .where(inArray(dispatchAttemptsTable.tripId, tripIds));
   const tripById = new Map(trips.map((trip) => [trip.id, trip]));
   for (const attempt of attempts) {
     const trip = tripById.get(attempt.tripId);

@@ -1,4 +1,4 @@
-import { integer, pgTable, real, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, real, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const tripEventsTable = pgTable(
   "trip_events",
@@ -17,6 +17,7 @@ export const tripEventsTable = pgTable(
   },
   (table) => ({
     eventKeyUnique: uniqueIndex("trip_events_event_key_unique").on(table.eventKey),
+    tripIdIndex: index("trip_events_trip_id_idx").on(table.tripId),
   }),
 );
 
