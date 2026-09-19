@@ -28,3 +28,6 @@ export * from "./trips";
 export * from "./trip-analytics";
 export * from "./trip-events";
 export * from "./virtual-zones";
+export * from "./users";
+export * from "./otp-challenges";
+export * from "./sessions";
